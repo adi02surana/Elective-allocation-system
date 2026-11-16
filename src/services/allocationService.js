@@ -1,6 +1,7 @@
 import { storageService } from "./storageService";
 import { validationService } from "./validationService";
 import { runAllocationEngine } from "./allocationEngine";
+import { apiClient } from "./apiClient";
 
 class AllocationService {
   getRuleConfig() {
@@ -37,6 +38,17 @@ class AllocationService {
       "ALLOCATION_RULE_UPDATED",
       `Tie-break policy updated to ${data.allocationRuleConfig.tieBreakPolicy}`
     );
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .put("/api/allocation/config", {
+          ...updates,
+          cycleId: data.allocationRuleConfig.cycleId,
+          actorRole,
+          actorName,
+        })
+        .catch(() => {});
+    }
 
     return { success: true, config: data.allocationRuleConfig };
   }
@@ -88,6 +100,17 @@ class AllocationService {
       `Allocated ${engineOutput.summary.totalAllocated} students, ${engineOutput.summary.totalUnallocated} unallocated across ${engineOutput.summary.totalElectives} electives.`
     );
 
+    // Also persist directly into backend SQLite database in transaction
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/allocation/execute", {
+          cycleId: ruleConfig.cycleId || "slot_sem6_active",
+          actorRole,
+          actorName,
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       results: engineOutput.results,
@@ -120,6 +143,16 @@ class AllocationService {
       `Allocation results officially published for students to view.`
     );
 
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/allocation/publish", {
+          cycleId: data.allocationRuleConfig.cycleId || "slot_sem6_active",
+          actorRole,
+          actorName,
+        })
+        .catch(() => {});
+    }
+
     return { success: true };
   }
 
@@ -142,6 +175,16 @@ class AllocationService {
       "ALLOCATION_RESET",
       `Allocation run and computed results were reset.`
     );
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/allocation/reset", {
+          cycleId: data.allocationRuleConfig.cycleId || "slot_sem6_active",
+          actorRole,
+          actorName,
+        })
+        .catch(() => {});
+    }
 
     return { success: true };
   }

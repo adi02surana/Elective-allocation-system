@@ -1,4 +1,5 @@
 import { storageService } from "./storageService";
+import { apiClient } from "./apiClient";
 
 const AUTH_USER_KEY = "LNMIIT_EAS_CURRENT_USER";
 
@@ -12,7 +13,7 @@ class AuthService {
     } catch (e) {
       console.error("Error reading auth state:", e);
     }
-    // Default to admin or student for seamless first experience
+    // Default to admin for seamless first experience
     const defaultUser = {
       id: "usr_admin_1",
       email: "admin.demo@example.test",
@@ -27,18 +28,40 @@ class AuthService {
 
   setCurrentUser(user) {
     try {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      if (user) {
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      } else {
+        localStorage.removeItem(AUTH_USER_KEY);
+      }
     } catch (e) {
       console.error("Error saving auth state:", e);
     }
   }
 
-  login(email) {
+  login(email, password = null) {
     const data = storageService.getData();
     const user = data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+
     if (user) {
       this.setCurrentUser(user);
       storageService.logAudit(user.name, user.role, "USER_LOGIN", `Logged in with role: ${user.role}`);
+
+      // Call backend API for session creation & token
+      if (typeof window !== "undefined" && window.fetch) {
+        apiClient
+          .post("/api/auth/login", {
+            email: user.email,
+            password: password || "demo123",
+            isDemoBypass: !password,
+          })
+          .then((res) => {
+            if (res.success && res.token) {
+              apiClient.setToken(res.token);
+            }
+          })
+          .catch(() => {});
+      }
+
       return { success: true, user };
     }
     return { success: false, error: "Invalid demo credentials or user not found." };
@@ -49,6 +72,12 @@ class AuthService {
     if (user) {
       storageService.logAudit(user.name, user.role, "USER_LOGOUT", "User logged out");
     }
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient.post("/api/auth/logout").catch(() => {});
+      apiClient.clearToken();
+    }
+
     localStorage.removeItem(AUTH_USER_KEY);
   }
 
@@ -82,6 +111,19 @@ class AuthService {
     };
 
     this.setCurrentUser(user);
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/auth/login", {
+          email: user.email,
+          isDemoBypass: true,
+        })
+        .then((res) => {
+          if (res.token) apiClient.setToken(res.token);
+        })
+        .catch(() => {});
+    }
+
     return true;
   }
 }

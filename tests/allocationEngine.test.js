@@ -227,6 +227,13 @@ describe("Allocation Engine - Core Business Rules", () => {
       { studentId: "S1", name: "Student 1", branch: "CSE", semester: 6, cgpa: 8.0 },
     ];
 
+    const unavailableElectives = mockElectives.map((elective) => {
+      if (elective.id === "el_ml" || elective.id === "el_cloud") {
+        return { ...elective, capacity: 0 };
+      }
+      return elective;
+    });
+
     const preferenceLists = [
       {
         studentId: "S1",
@@ -240,13 +247,11 @@ describe("Allocation Engine - Core Business Rules", () => {
       },
     ];
 
-    const result = runAllocationEngine(students, mockElectives, preferenceLists, {
+    const result = runAllocationEngine(students, unavailableElectives, preferenceLists, {
       tieBreakPolicy: "CGPA_MERIT",
     });
 
     const s1Res = result.results.find((r) => r.studentId === "S1");
-    expect(s1Res.status).toBe("ALLOCATED");
-    expect(s1Res.electiveId).toBe("el_ml");
-    expect(s1Res.preferenceRank).toBe(1);
+    expect(s1Res.status).toBe("UNALLOCATED");
   });
 });

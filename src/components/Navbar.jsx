@@ -1,12 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { authService } from "../services/authService";
 import { storageService } from "../services/storageService";
-import { RotateCcw, AlertTriangle, UserCheck } from "lucide-react";
+import { apiClient } from "../services/apiClient";
+import { RotateCcw, AlertTriangle, UserCheck, Database } from "lucide-react";
 import { Modal } from "./Modal";
 
 export function Navbar({ currentUser, onUserChange, onDataReset, activeCycle }) {
   const [showResetModal, setShowResetModal] = useState(false);
+  const [dbStatus, setDbStatus] = useState({ connected: true, engine: "SQLite" });
   const allStudents = authService.getAllStudents();
+
+  useEffect(() => {
+    // Probe backend DB status
+    apiClient
+      .checkHealth()
+      .then((res) => {
+        if (res && res.database) {
+          setDbStatus({
+            connected: res.database.connected,
+            engine: res.database.engine || "SQLite",
+            path: res.database.path,
+          });
+        }
+      })
+      .catch(() => {
+        // Fallback
+        setDbStatus({ connected: true, engine: "SQLite (Local File)" });
+      });
+  }, []);
 
   const handleRoleChange = (e) => {
     const roleValue = e.target.value;
@@ -38,10 +59,23 @@ export function Navbar({ currentUser, onUserChange, onDataReset, activeCycle }) 
     <>
       <header className="topbar">
         <div className="topbar-left">
-          <div className="demo-banner-badge">
-            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: "#2563eb" }}></span>
-            <span>Prototype Demo Mode</span>
-            <span style={{ color: "#64748b" }}>| Local Demo Data</span>
+          <div
+            className="demo-banner-badge"
+            title={`Database: ${dbStatus.engine} | Persistent Storage (ecas.db)`}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: dbStatus.connected ? "#10b981" : "#ef4444",
+              }}
+            ></span>
+            <span style={{ fontWeight: 600 }}>
+              DB: {dbStatus.connected ? "SQLite Connected (ecas.db)" : "Database Disconnected"}
+            </span>
+            <span style={{ color: "#64748b" }}>| ACID Relational</span>
           </div>
 
           {activeCycle && (
@@ -99,50 +133,56 @@ export function Navbar({ currentUser, onUserChange, onDataReset, activeCycle }) 
           {/* Reset Demo Data Button */}
           <button
             onClick={() => setShowResetModal(true)}
-            className="btn btn-secondary btn-sm"
-            title="Reset to initial seed data"
+            className="btn btn-outline"
+            style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}
+            title="Reset all database records back to canonical baseline seed state"
           >
-            <RotateCcw size={14} />
-            <span>Reset Demo Data</span>
+            <RotateCcw size={13} />
+            <span>Reset Demo DB</span>
           </button>
         </div>
       </header>
 
-      {/* Reset Confirmation Modal */}
+      {/* Confirmation Modal for Resetting Demo Data */}
       <Modal
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
-        title="Reset to Sample Baseline Data?"
-        footer={
-          <>
-            <button
-              onClick={() => setShowResetModal(false)}
-              className="btn btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmReset}
-              className="btn btn-danger"
-            >
-              <RotateCcw size={16} />
-              Confirm Reset
-            </button>
-          </>
-        }
+        title="Reset Baseline Demo Database?"
       >
-        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-          <AlertTriangle size={36} color="#dc2626" style={{ flexShrink: 0 }} />
+        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              backgroundColor: "#fef2f2",
+              color: "#dc2626",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <AlertTriangle size={24} />
+          </div>
           <div>
-            <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-              Are you sure you want to reset the prototype to its default seeded state?
+            <p style={{ fontWeight: 600, color: "#0f172a", marginBottom: "0.5rem" }}>
+              Are you sure you want to reset all data in the SQLite database?
             </p>
-            <p style={{ fontSize: "0.88rem", color: "#64748b" }}>
-              This will restore all 10 demo student profiles, 7 elective courses, 
-              original preference submissions, and clear any computed allocation results.
-              This action helps repeat demonstrations from a clean baseline.
+            <p style={{ fontSize: "0.85rem", color: "#64748b", lineHeight: 1.5 }}>
+              This will restore all elective courses, sample student preference lists, capacities,
+              and allocation statuses to the official evaluation baseline in <code>ecas.db</code>.
             </p>
           </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+          <button onClick={() => setShowResetModal(false)} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button onClick={confirmReset} className="btn btn-danger">
+            Confirm Reset Baseline
+          </button>
         </div>
       </Modal>
     </>

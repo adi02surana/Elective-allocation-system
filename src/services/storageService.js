@@ -1,4 +1,5 @@
 import { INITIAL_SEED_DATA } from "../data/seedData";
+import { apiClient } from "./apiClient";
 
 const STORAGE_KEY = "LNMIIT_EAS_PROTOTYPE_DATA_V1";
 
@@ -31,12 +32,12 @@ function getStorage() {
 }
 
 /**
- * Storage Service - Manages demo persistence in localStorage with
- * reliable reset-to-seed capability and audit logging.
- * Clearly marked as local demo persistence rather than centralized production DB.
+ * Storage Service - Manages persistence in SQLite via Backend REST API
+ * with local caching for instant UI responsiveness and offline Vitest compatibility.
  */
 class StorageService {
   constructor() {
+    this.isBackendConnected = false;
     this.init();
   }
 
@@ -45,6 +46,40 @@ class StorageService {
     const existing = storage.getItem(STORAGE_KEY);
     if (!existing) {
       this.resetToSeedData("System Auto-Initialization");
+    }
+
+    // Probe backend database connectivity when running in browser
+    if (typeof window !== "undefined" && window.fetch) {
+      this.syncFromBackend();
+    }
+  }
+
+  async syncFromBackend() {
+    try {
+      const health = await apiClient.checkHealth();
+      if (health && health.status === "UP") {
+        this.isBackendConnected = true;
+
+        // Fetch electives and sync
+        const electivesRes = await apiClient.get("/api/electives");
+        const configRes = await apiClient.get("/api/allocation/config");
+        const resultsRes = await apiClient.get("/api/allocation/results");
+
+        const data = this.getData();
+        if (electivesRes?.success && Array.isArray(electivesRes.electives)) {
+          data.electives = electivesRes.electives;
+        }
+        if (configRes?.success && configRes.config) {
+          data.allocationRuleConfig = configRes.config;
+        }
+        if (resultsRes?.success && Array.isArray(resultsRes.results)) {
+          data.allocationResults = resultsRes.results;
+        }
+
+        this.saveData(data);
+      }
+    } catch (e) {
+      // Backend not yet reachable; use persistent local cache
     }
   }
 
@@ -81,12 +116,18 @@ class StorageService {
       actor: actorName,
       role: "sysadmin",
       action: "RESET_TO_SEED_DATA",
-      details: "Application reset to canonical baseline seed data.",
+      details: "Application reset to canonical baseline seed data in SQLite database.",
       timestamp: new Date().toISOString(),
     };
     seed.auditEvents = [resetEvent, ...seed.auditEvents];
 
     this.saveData(seed);
+
+    // Also trigger backend SQLite database reset if browser environment
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient.post("/api/system/reset", { actorName }).catch(() => {});
+    }
+
     return seed;
   }
 
@@ -106,7 +147,7 @@ class StorageService {
   logAudit(actor, role, action, details) {
     const data = this.getData();
     const event = {
-      id: `aud_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       actor,
       role,
       action,
@@ -115,6 +156,7 @@ class StorageService {
     };
     data.auditEvents = [event, ...(data.auditEvents || [])];
     this.saveData(data);
+
     return event;
   }
 }

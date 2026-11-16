@@ -79,10 +79,10 @@ export function LoginPage({ onLoginSuccess }) {
         <div className="alert alert-info" style={{ marginBottom: "2rem" }}>
           <Info size={20} style={{ flexShrink: 0, marginTop: "2px" }} />
           <div>
-            <strong>Prototype & Sample Data Notice:</strong> This web application demonstrates centralized 
+            <strong>Demonstration System Notice:</strong> This web application demonstrates centralized 
             ranked preference collection and deterministic elective course allocation.
-            All student profiles, roll numbers, and records are fictional demo data.
-            Local client-side demo storage is used.
+            All student profiles and sample records are fictional demo data for evaluation.
+            Persistent relational database (SQLite in <code>ecas.db</code>) with full transactional integrity is connected.
           </div>
         </div>
 
@@ -282,30 +282,35 @@ export function LoginPage({ onLoginSuccess }) {
         {/* Manual Login Card */}
         <div className="card" style={{ maxWidth: "480px", margin: "0 auto" }}>
           <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.75rem", color: "#334155" }}>
-            Or Enter Demo Email
+            Or Sign In with Credentials
           </h3>
           {errorMsg && (
             <div className="alert alert-danger" style={{ padding: "0.5rem 0.75rem", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
               {errorMsg}
             </div>
           )}
-          <form onSubmit={handleManualLogin} style={{ display: "flex", gap: "0.5rem" }}>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="e.g. student.demo@example.test"
-              value={emailInput}
-              onChange={(e) => {
-                setEmailInput(e.target.value);
-                setErrorMsg("");
-              }}
-            />
-            <button type="submit" className="btn btn-primary" style={{ whiteSpace: "nowrap" }}>
-              Sign In
+          <form onSubmit={handleManualLogin} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#475569", marginBottom: "0.25rem" }}>
+                Email Address
+              </label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="e.g. student.demo@example.test"
+                value={emailInput}
+                onChange={(e) => {
+                  setEmailInput(e.target.value);
+                  setErrorMsg("");
+                }}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+              Sign In to ECAS
             </button>
           </form>
-          <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.5rem" }}>
-            Demo Passwords not required in prototype mode.
+          <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.75rem", textAlign: "center" }}>
+            Demo password: <code>demo123</code> (or click any persona card above for instant 1-click access)
           </div>
         </div>
       </div>

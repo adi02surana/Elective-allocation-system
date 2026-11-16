@@ -1,5 +1,6 @@
 import { storageService } from "./storageService";
 import { validationService } from "./validationService";
+import { apiClient } from "./apiClient";
 
 class ElectiveService {
   getAllElectives() {
@@ -39,7 +40,7 @@ class ElectiveService {
       const isSemesterEligible =
         !elective.applicableSemesters ||
         elective.applicableSemesters.length === 0 ||
-        elective.applicableSemesters.includes(studentProfile.semester);
+        elective.applicableSemesters.includes(Number(studentProfile.semester));
 
       const isCgpaEligible =
         !elective.minCgpa || elective.minCgpa === 0 || studentProfile.cgpa >= elective.minCgpa;
@@ -107,6 +108,11 @@ class ElectiveService {
       `Created elective ${newElective.courseCode} (${newElective.name}) with capacity ${newElective.capacity}`
     );
 
+    // Call backend API for SQLite persistence
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient.post("/api/electives", { ...newElective, actorRole, actorName }).catch(() => {});
+    }
+
     return { success: true, elective: newElective };
   }
 
@@ -156,6 +162,11 @@ class ElectiveService {
       `Updated elective ${updated.courseCode} (Capacity: ${updated.capacity}, Status: ${updated.status})`
     );
 
+    // Call backend API for SQLite persistence
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient.put(`/api/electives/${id}`, { ...updated, actorRole, actorName }).catch(() => {});
+    }
+
     return { success: true, elective: updated };
   }
 
@@ -189,6 +200,10 @@ class ElectiveService {
       "COURSE_DELETED",
       `Deleted elective course ${elective.courseCode} (${elective.name})`
     );
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient.delete(`/api/electives/${id}`).catch(() => {});
+    }
 
     return { success: true };
   }

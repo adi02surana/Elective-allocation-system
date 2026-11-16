@@ -1,5 +1,6 @@
 import { storageService } from "./storageService";
 import { validationService } from "./validationService";
+import { apiClient } from "./apiClient";
 
 class PreferenceService {
   getActiveWindow(cycleId = "slot_sem6_active") {
@@ -59,6 +60,14 @@ class PreferenceService {
     }
 
     storageService.saveData(data);
+
+    // Call backend API for SQLite draft persistence
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/preferences/draft", { studentId, cycleId, items: updatedList.items })
+        .catch(() => {});
+    }
+
     return { success: true, preferenceList: updatedList };
   }
 
@@ -124,6 +133,17 @@ class PreferenceService {
       `Submitted ${normalizedItems.length} ranked preferences for cycle ${cycleId} at ${nowIso}`
     );
 
+    // Call backend API for SQLite submission persistence in transaction
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/preferences/submit", {
+          studentId: studentProfile.studentId,
+          cycleId,
+          items: normalizedItems,
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       preferenceList: submittedRecord,
@@ -166,6 +186,15 @@ class PreferenceService {
       "PREFERENCES_REOPENED",
       `Student reopened submitted preferences for modification within open window.`
     );
+
+    if (typeof window !== "undefined" && window.fetch) {
+      apiClient
+        .post("/api/preferences/reopen", {
+          studentId: studentProfile.studentId,
+          cycleId,
+        })
+        .catch(() => {});
+    }
 
     return {
       success: true,
