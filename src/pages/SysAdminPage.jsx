@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { storageService } from "../services/storageService";
+import { apiClient } from "../services/apiClient";
 import { StatusBadge } from "../components/StatusBadge";
 import { Modal } from "../components/Modal";
 import {
@@ -8,9 +9,10 @@ import {
   RotateCcw,
   ShieldCheck,
   Clock,
-  Database,
   AlertTriangle,
   CheckCircle2,
+  Database,
+  Search,
 } from "lucide-react";
 
 export function SysAdminPage({ onDataReset }) {
@@ -18,19 +20,74 @@ export function SysAdminPage({ onDataReset }) {
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // Live Database Explorer state
+  const [dbTables, setDbTables] = useState([]);
+  const [selectedTable, setSelectedTable] = useState("preference_lists");
+  const [tableData, setTableData] = useState({ columns: [], rows: [] });
+  const [isLoadingTable, setIsLoadingTable] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
+
   useEffect(() => {
     loadData();
+    fetchTables();
   }, []);
+
+  useEffect(() => {
+    if (selectedTable) {
+      fetchTableData(selectedTable);
+    }
+  }, [selectedTable]);
+
+  useEffect(() => {
+    let intervalId;
+    if (autoRefresh && selectedTable) {
+      intervalId = setInterval(() => {
+        fetchTableData(selectedTable, true);
+        fetchTables();
+      }, 2000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [autoRefresh, selectedTable]);
 
   const loadData = () => {
     setData(storageService.getData());
   };
 
-  const handleResetData = () => {
-    storageService.resetToSeedData("System Administrator");
+  const fetchTables = async () => {
+    try {
+      const res = await apiClient.get("/api/database/tables");
+      if (res && res.success && res.tables) {
+        setDbTables(res.tables);
+      }
+    } catch {
+      // fallback
+    }
+  };
+
+  const fetchTableData = async (tableName, isSilent = false) => {
+    if (!isSilent) setIsLoadingTable(true);
+    try {
+      const res = await apiClient.get(`/api/database/table/${tableName}`);
+      if (res && res.success) {
+        setTableData({ columns: res.columns || [], rows: res.rows || [] });
+      }
+    } catch (err) {
+      console.error("Failed to load table data:", err);
+    } finally {
+      if (!isSilent) setIsLoadingTable(false);
+    }
+  };
+
+  const handleResetData = async () => {
+    await storageService.resetToSeedData("System Administrator");
     setShowResetModal(false);
     setResetSuccess(true);
     loadData();
+    fetchTables();
+    if (selectedTable) fetchTableData(selectedTable);
     if (onDataReset) onDataReset();
   };
 
@@ -64,14 +121,133 @@ export function SysAdminPage({ onDataReset }) {
         </div>
       )}
 
-      {/* Persistence Architecture Note */}
-      <div className="alert alert-info">
-        <Database size={20} style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Demo Architecture Notice:</strong> This prototype utilizes browser local storage 
-          (<code>localStorage</code>) to simulate centralized persistence across demo personas without 
-          requiring external cloud database setup. In institutional production, this service layer 
-          would interface with LNMIIT's PostgreSQL database and campus ERP.
+      {/* Live SQLite Database Explorer */}
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <div className="card-header" style={{ flexWrap: "wrap", gap: "1rem" }}>
+          <div>
+            <h2 className="card-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Database size={20} color="#2563eb" />
+              <span>Live SQLite Database Explorer (ecas.db)</span>
+            </h2>
+            <p className="card-subtitle">
+              Inspect database tables, schema columns, and live records in real time as actions occur
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            {/* Table Selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#64748b" }}>Table:</label>
+              <select
+                className="form-select"
+                style={{ minWidth: "190px", padding: "0.35rem 0.6rem", fontSize: "0.85rem" }}
+                value={selectedTable}
+                onChange={(e) => setSelectedTable(e.target.value)}
+              >
+                {dbTables.map((t) => (
+                  <option key={t.name} value={t.name}>
+                    {t.name} ({t.rowCount} rows)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Manual Refresh Button */}
+            <button
+              onClick={() => {
+                fetchTableData(selectedTable);
+                fetchTables();
+              }}
+              className="btn btn-secondary btn-sm"
+              title="Query SQLite database for latest records"
+            >
+              <RotateCcw size={14} />
+              <span>Refresh</span>
+            </button>
+
+            {/* Auto Refresh Toggle */}
+            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#475569", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                style={{ accentColor: "#2563eb" }}
+              />
+              <span>Live Poll (2s)</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Search inside table */}
+        <div style={{ padding: "0 1.25rem 0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <Search size={16} color="#64748b" />
+          <input
+            type="text"
+            className="form-input"
+            style={{ maxWidth: "320px", padding: "0.35rem 0.65rem", fontSize: "0.82rem" }}
+            placeholder={`Filter ${selectedTable} rows...`}
+            value={tableSearch}
+            onChange={(e) => setTableSearch(e.target.value)}
+          />
+          <span style={{ fontSize: "0.78rem", color: "#64748b", marginLeft: "auto" }}>
+            Showing <strong>{tableData.rows.filter((r) => !tableSearch || Object.values(r).some((v) => String(v || "").toLowerCase().includes(tableSearch.toLowerCase()))).length}</strong> of <strong>{tableData.rows.length}</strong> records
+          </span>
+        </div>
+
+        {/* Database Records Table */}
+        <div className="table-container" style={{ maxHeight: "380px", overflowY: "auto" }}>
+          {tableData.rows.length === 0 ? (
+            <div style={{ padding: "2rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
+              {isLoadingTable ? "Loading records from ecas.db..." : `No records found in table '${selectedTable}'.`}
+            </div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  {tableData.columns.map((col) => (
+                    <th key={col.name} style={{ whiteSpace: "nowrap" }}>
+                      {col.name}
+                      <span style={{ fontSize: "0.65rem", color: "#94a3b8", display: "block", fontWeight: 400 }}>
+                        {col.type} {col.pk ? "(PK)" : ""}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableData.rows
+                  .filter((r) => !tableSearch || Object.values(r).some((v) => String(v || "").toLowerCase().includes(tableSearch.toLowerCase())))
+                  .map((row, idx) => (
+                    <tr key={idx}>
+                      {tableData.columns.map((col) => {
+                        const val = row[col.name];
+                        const valStr = val === null ? "NULL" : typeof val === "object" ? JSON.stringify(val) : String(val);
+                        const isNull = val === null;
+                        const isStatus = col.name.toLowerCase() === "status";
+
+                        return (
+                          <td key={col.name} style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>
+                            {isStatus && !isNull ? (
+                              <StatusBadge status={String(val)} label={String(val)} />
+                            ) : (
+                              <span
+                                style={{
+                                  color: isNull ? "#94a3b8" : "#1e293b",
+                                  fontStyle: isNull ? "italic" : "normal",
+                                  fontFamily: typeof val === "number" || col.name.includes("id") ? "var(--font-mono)" : "inherit",
+                                }}
+                              >
+                                {valStr}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 

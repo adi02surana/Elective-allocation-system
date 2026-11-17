@@ -64,7 +64,7 @@ class ElectiveService {
     });
   }
 
-  createElective(data, actorRole = "faculty", actorName = "Faculty Coordinator") {
+  async createElective(data, actorRole = "faculty", actorName = "Faculty Coordinator") {
     if (!validationService.canManageCourses(actorRole)) {
       return { success: false, errors: ["Unauthorized: Only Faculty Coordinators or Administrators can create electives."] };
     }
@@ -84,7 +84,7 @@ class ElectiveService {
     }
 
     const newElective = {
-      id: `el_${Date.now()}`,
+      id: data.id || `el_${Date.now()}`,
       courseCode: data.courseCode.trim().toUpperCase(),
       name: data.name.trim(),
       description: data.description || "",
@@ -98,6 +98,17 @@ class ElectiveService {
       status: data.status || "ACTIVE",
     };
 
+    // Call backend API for SQLite persistence
+    if (typeof window !== "undefined" && window.fetch) {
+      const res = await apiClient.post("/api/electives", { ...newElective, actorRole, actorName });
+      if (!res.success) {
+        return { success: false, errors: res.errors || [res.error || "Failed to create elective in database."] };
+      }
+      if (res.elective) {
+        newElective.id = res.elective.id;
+      }
+    }
+
     appData.electives.push(newElective);
     storageService.saveData(appData);
 
@@ -108,15 +119,10 @@ class ElectiveService {
       `Created elective ${newElective.courseCode} (${newElective.name}) with capacity ${newElective.capacity}`
     );
 
-    // Call backend API for SQLite persistence
-    if (typeof window !== "undefined" && window.fetch) {
-      apiClient.post("/api/electives", { ...newElective, actorRole, actorName }).catch(() => {});
-    }
-
     return { success: true, elective: newElective };
   }
 
-  updateElective(id, data, actorRole = "faculty", actorName = "Faculty Coordinator") {
+  async updateElective(id, data, actorRole = "faculty", actorName = "Faculty Coordinator") {
     if (!validationService.canManageCourses(actorRole)) {
       return { success: false, errors: ["Unauthorized: Only Faculty Coordinators or Administrators can edit electives."] };
     }
@@ -152,6 +158,14 @@ class ElectiveService {
       status: data.status || appData.electives[electiveIndex].status,
     };
 
+    // Call backend API for SQLite persistence
+    if (typeof window !== "undefined" && window.fetch) {
+      const res = await apiClient.put(`/api/electives/${id}`, { ...updated, actorRole, actorName });
+      if (!res.success) {
+        return { success: false, errors: res.errors || [res.error || "Failed to update elective in database."] };
+      }
+    }
+
     appData.electives[electiveIndex] = updated;
     storageService.saveData(appData);
 
@@ -162,15 +176,10 @@ class ElectiveService {
       `Updated elective ${updated.courseCode} (Capacity: ${updated.capacity}, Status: ${updated.status})`
     );
 
-    // Call backend API for SQLite persistence
-    if (typeof window !== "undefined" && window.fetch) {
-      apiClient.put(`/api/electives/${id}`, { ...updated, actorRole, actorName }).catch(() => {});
-    }
-
     return { success: true, elective: updated };
   }
 
-  deleteElective(id, actorRole = "faculty", actorName = "Faculty Coordinator") {
+  async deleteElective(id, actorRole = "faculty", actorName = "Faculty Coordinator") {
     if (!validationService.canManageCourses(actorRole)) {
       return { success: false, errors: ["Unauthorized."] };
     }
@@ -191,6 +200,13 @@ class ElectiveService {
       };
     }
 
+    if (typeof window !== "undefined" && window.fetch) {
+      const res = await apiClient.delete(`/api/electives/${id}`);
+      if (!res.success) {
+        return { success: false, errors: [res.error || "Failed to delete elective from database."] };
+      }
+    }
+
     appData.electives = appData.electives.filter((e) => e.id !== id);
     storageService.saveData(appData);
 
@@ -200,10 +216,6 @@ class ElectiveService {
       "COURSE_DELETED",
       `Deleted elective course ${elective.courseCode} (${elective.name})`
     );
-
-    if (typeof window !== "undefined" && window.fetch) {
-      apiClient.delete(`/api/electives/${id}`).catch(() => {});
-    }
 
     return { success: true };
   }

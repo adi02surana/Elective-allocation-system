@@ -7,6 +7,8 @@
     "dev": "vite",
     "server": "node server/index.js",
     "db:seed": "node server/db/seed.js",
+    "db:view": "node scripts/view_db.js",
+    "db:watch": "node scripts/view_db.js --watch",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run"

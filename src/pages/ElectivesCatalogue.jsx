@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { authService } from "../services/authService";
 import { electiveService } from "../services/electiveService";
 import { StatusBadge } from "../components/StatusBadge";
-import { Search, Filter, BookOpen, User, CheckCircle2, XCircle, Info, Plus } from "lucide-react";
+import { Search, Filter, BookOpen, User, CheckCircle2, XCircle, Plus } from "lucide-react";
 
 export function ElectivesCatalogue({ onAddToPreferences }) {
   const [electives, setElectives] = useState([]);
@@ -49,16 +49,6 @@ export function ElectivesCatalogue({ onAddToPreferences }) {
           <p className="page-description">
             Explore approved open and departmental electives offered for Spring 2026.
           </p>
-        </div>
-      </div>
-
-      {/* Institutional Allocation Policy Notice */}
-      <div className="alert alert-info">
-        <Info size={20} style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Seat Reservation Policy:</strong> Listing or selecting a course in your preference list does 
-          <strong> NOT</strong> reserve a seat. Seats are awarded strictly during centralized allocation based on 
-          approved academic priority (merit), submitted preference ranking, and total configured course capacities.
         </div>
       </div>
 

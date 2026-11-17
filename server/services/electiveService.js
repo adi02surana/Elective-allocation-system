@@ -78,12 +78,12 @@ export function getElectivesForStudent(studentProfile, cycleId = "slot_sem6_acti
     const isBranchEligible =
       !elective.applicableBranches ||
       elective.applicableBranches.length === 0 ||
-      elective.applicableBranches.includes(studentProfile.branch);
+      elective.applicableBranches.map((b) => String(b).toUpperCase()).includes(String(studentProfile.branch).toUpperCase());
 
     const isSemesterEligible =
       !elective.applicableSemesters ||
       elective.applicableSemesters.length === 0 ||
-      elective.applicableSemesters.includes(Number(studentProfile.semester));
+      elective.applicableSemesters.map(Number).includes(Number(studentProfile.semester));
 
     const isCgpaEligible =
       !elective.minCgpa || elective.minCgpa === 0 || studentProfile.cgpa >= elective.minCgpa;
@@ -141,7 +141,7 @@ export function createElective(data, actorRole = "faculty", actorName = "Faculty
     return { success: false, errors: [`Course Code ${normalizedCode} already exists.`] };
   }
 
-  const id = `el_${Date.now()}`;
+  const id = data.id || `el_${Date.now()}`;
   const branches = JSON.stringify(Array.isArray(data.applicableBranches) ? data.applicableBranches : ["CSE"]);
   const semesters = JSON.stringify(Array.isArray(data.applicableSemesters) ? data.applicableSemesters.map(Number) : [6]);
 

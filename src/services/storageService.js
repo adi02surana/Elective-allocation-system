@@ -60,20 +60,50 @@ class StorageService {
       if (health && health.status === "UP") {
         this.isBackendConnected = true;
 
-        // Fetch electives and sync
-        const electivesRes = await apiClient.get("/api/electives");
-        const configRes = await apiClient.get("/api/allocation/config");
-        const resultsRes = await apiClient.get("/api/allocation/results");
+        const [
+          electivesRes,
+          configRes,
+          resultsRes,
+          windowsRes,
+          prefListsRes,
+          studentsRes,
+          usersRes,
+          auditRes,
+        ] = await Promise.allSettled([
+          apiClient.get("/api/electives"),
+          apiClient.get("/api/allocation/config"),
+          apiClient.get("/api/allocation/results"),
+          apiClient.get("/api/preferences/windows"),
+          apiClient.get("/api/preferences/lists"),
+          apiClient.get("/api/students"),
+          apiClient.get("/api/users"),
+          apiClient.get("/api/audit-events"),
+        ]);
 
         const data = this.getData();
-        if (electivesRes?.success && Array.isArray(electivesRes.electives)) {
-          data.electives = electivesRes.electives;
+        if (electivesRes.status === "fulfilled" && electivesRes.value?.success && Array.isArray(electivesRes.value.electives)) {
+          data.electives = electivesRes.value.electives;
         }
-        if (configRes?.success && configRes.config) {
-          data.allocationRuleConfig = configRes.config;
+        if (configRes.status === "fulfilled" && configRes.value?.success && configRes.value.config) {
+          data.allocationRuleConfig = configRes.value.config;
         }
-        if (resultsRes?.success && Array.isArray(resultsRes.results)) {
-          data.allocationResults = resultsRes.results;
+        if (resultsRes.status === "fulfilled" && resultsRes.value?.success && Array.isArray(resultsRes.value.results)) {
+          data.allocationResults = resultsRes.value.results;
+        }
+        if (windowsRes.status === "fulfilled" && windowsRes.value?.success && Array.isArray(windowsRes.value.windows)) {
+          data.registrationWindows = windowsRes.value.windows;
+        }
+        if (prefListsRes.status === "fulfilled" && prefListsRes.value?.success && Array.isArray(prefListsRes.value.preferenceLists)) {
+          data.preferenceLists = prefListsRes.value.preferenceLists;
+        }
+        if (studentsRes.status === "fulfilled" && studentsRes.value?.success && Array.isArray(studentsRes.value.students)) {
+          data.studentProfiles = studentsRes.value.students;
+        }
+        if (usersRes.status === "fulfilled" && usersRes.value?.success && Array.isArray(usersRes.value.users)) {
+          data.users = usersRes.value.users;
+        }
+        if (auditRes.status === "fulfilled" && auditRes.value?.success && Array.isArray(auditRes.value.auditEvents)) {
+          data.auditEvents = auditRes.value.auditEvents;
         }
 
         this.saveData(data);
@@ -125,7 +155,9 @@ class StorageService {
 
     // Also trigger backend SQLite database reset if browser environment
     if (typeof window !== "undefined" && window.fetch) {
-      apiClient.post("/api/system/reset", { actorName }).catch(() => {});
+      apiClient.post("/api/system/reset", { actorName }).then(() => {
+        this.syncFromBackend();
+      }).catch(() => {});
     }
 
     return seed;

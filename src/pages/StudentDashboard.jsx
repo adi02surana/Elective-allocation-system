@@ -3,6 +3,7 @@ import { authService } from "../services/authService";
 import { preferenceService } from "../services/preferenceService";
 import { electiveService } from "../services/electiveService";
 import { allocationService } from "../services/allocationService";
+import { storageService } from "../services/storageService";
 import { StatusBadge } from "../components/StatusBadge";
 import {
   GraduationCap,
@@ -27,7 +28,13 @@ export function StudentDashboard({ onNavigate }) {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
+    try {
+      await storageService.syncFromBackend();
+    } catch {
+      // fallback
+    }
+
     const student = authService.getCurrentStudentProfile();
     setProfile(student);
 
@@ -35,7 +42,7 @@ export function StudentDashboard({ onNavigate }) {
       const window = preferenceService.getActiveWindow();
       setActiveWindow(window);
 
-      const prefs = preferenceService.getStudentPreferenceList(student.studentId, window?.id);
+      const prefs = await preferenceService.fetchStudentPreferenceList(student.studentId, window?.id);
       setPrefList(prefs);
 
       const electives = electiveService.getElectivesForStudent(student);

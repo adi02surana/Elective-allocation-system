@@ -1,27 +1,29 @@
 import React, { useState } from "react";
 import { authService } from "../services/authService";
-import { GraduationCap, BookOpen, ShieldCheck, Settings, ArrowRight, Info } from "lucide-react";
+import { GraduationCap, BookOpen, ShieldCheck, Settings, ArrowRight } from "lucide-react";
 
 export function LoginPage({ onLoginSuccess }) {
   const [emailInput, setEmailInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleDemoCardClick = (demoEmail) => {
-    const res = authService.login(demoEmail);
+  const handleDemoCardClick = async (demoEmail) => {
+    setErrorMsg("");
+    const res = await authService.login(demoEmail);
     if (res.success) {
       onLoginSuccess(res.user);
     } else {
-      setErrorMsg(res.error);
+      setErrorMsg(res.error || "Login failed.");
     }
   };
 
-  const handleManualLogin = (e) => {
+  const handleManualLogin = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
     if (!emailInput.trim()) {
       setErrorMsg("Please enter an email address.");
       return;
     }
-    const res = authService.login(emailInput.trim());
+    const res = await authService.login(emailInput.trim());
     if (res.success) {
       onLoginSuccess(res.user);
     } else {
@@ -72,17 +74,6 @@ export function LoginPage({ onLoginSuccess }) {
           </p>
           <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.25rem" }}>
             Krishangee Tayal • Mudit Kumar Dwivedi • Lakshit Agarwal • Ananya Surana
-          </div>
-        </div>
-
-        {/* Demo Disclaimer Alert */}
-        <div className="alert alert-info" style={{ marginBottom: "2rem" }}>
-          <Info size={20} style={{ flexShrink: 0, marginTop: "2px" }} />
-          <div>
-            <strong>Demonstration System Notice:</strong> This web application demonstrates centralized 
-            ranked preference collection and deterministic elective course allocation.
-            All student profiles and sample records are fictional demo data for evaluation.
-            Persistent relational database (SQLite in <code>ecas.db</code>) with full transactional integrity is connected.
           </div>
         </div>
 

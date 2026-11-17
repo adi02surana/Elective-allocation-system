@@ -1,5 +1,6 @@
 import { storageService } from "./storageService";
 import { apiClient } from "./apiClient";
+import { INITIAL_SEED_DATA } from "../data/seedData";
 
 const AUTH_USER_KEY = "LNMIIT_EAS_CURRENT_USER";
 
@@ -38,28 +39,38 @@ class AuthService {
     }
   }
 
-  login(email, password = null) {
+  async login(email, password = null) {
+    const cleanEmail = (email || "").trim().toLowerCase();
     const data = storageService.getData();
-    const user = data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    let user = (data.users || []).find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      user = INITIAL_SEED_DATA.users.find((u) => u.email.toLowerCase() === cleanEmail);
+      if (user) {
+        data.users = data.users || [];
+        data.users.push(user);
+        storageService.saveData(data);
+      }
+    }
 
     if (user) {
       this.setCurrentUser(user);
       storageService.logAudit(user.name, user.role, "USER_LOGIN", `Logged in with role: ${user.role}`);
 
       // Call backend API for session creation & token
-      if (typeof window !== "undefined" && window.fetch) {
-        apiClient
-          .post("/api/auth/login", {
+      if (typeof globalThis !== "undefined" && typeof globalThis.fetch === "function") {
+        try {
+          const res = await apiClient.post("/api/auth/login", {
             email: user.email,
             password: password || "demo123",
             isDemoBypass: !password,
-          })
-          .then((res) => {
-            if (res.success && res.token) {
-              apiClient.setToken(res.token);
-            }
-          })
-          .catch(() => {});
+          });
+          if (res?.success && res.token) {
+            apiClient.setToken(res.token);
+          }
+        } catch (e) {
+          console.error("Backend login sync error:", e);
+        }
       }
 
       return { success: true, user };
@@ -67,14 +78,16 @@ class AuthService {
     return { success: false, error: "Invalid demo credentials or user not found." };
   }
 
-  logout() {
+  async logout() {
     const user = this.getCurrentUser();
     if (user) {
       storageService.logAudit(user.name, user.role, "USER_LOGOUT", "User logged out");
     }
 
     if (typeof window !== "undefined" && window.fetch) {
-      apiClient.post("/api/auth/logout").catch(() => {});
+      try {
+        await apiClient.post("/api/auth/logout");
+      } catch (e) {}
       apiClient.clearToken();
     }
 
@@ -87,7 +100,10 @@ class AuthService {
 
     const data = storageService.getData();
     const profile = data.studentProfiles.find(
-      (p) => p.userId === user.id || p.studentId === user.studentId
+      (p) =>
+        (p.studentId && user.studentId && p.studentId.toUpperCase() === user.studentId.toUpperCase()) ||
+        p.userId === user.id ||
+        p.studentId === user.studentId
     );
     return profile || null;
   }
@@ -97,13 +113,19 @@ class AuthService {
     return data.studentProfiles || [];
   }
 
-  switchDemoStudent(studentId) {
+  async switchDemoStudent(studentId) {
     const data = storageService.getData();
-    const studentProfile = data.studentProfiles.find((s) => s.studentId === studentId);
+    const studentProfile = data.studentProfiles.find(
+      (s) => s.studentId?.toUpperCase() === studentId?.toUpperCase() || s.studentId === studentId
+    );
     if (!studentProfile) return false;
 
-    const user = data.users.find((u) => u.id === studentProfile.userId || u.studentId === studentId) || {
-      id: studentProfile.userId || `usr_${studentId}`,
+    const user = data.users.find(
+      (u) =>
+        u.id === studentProfile.userId ||
+        (u.studentId && u.studentId.toUpperCase() === studentProfile.studentId.toUpperCase())
+    ) || {
+      id: studentProfile.userId || `usr_${studentProfile.studentId}`,
       email: studentProfile.email,
       name: studentProfile.name,
       role: "student",
@@ -113,15 +135,15 @@ class AuthService {
     this.setCurrentUser(user);
 
     if (typeof window !== "undefined" && window.fetch) {
-      apiClient
-        .post("/api/auth/login", {
+      try {
+        const res = await apiClient.post("/api/auth/login", {
           email: user.email,
           isDemoBypass: true,
-        })
-        .then((res) => {
-          if (res.token) apiClient.setToken(res.token);
-        })
-        .catch(() => {});
+        });
+        if (res?.token) apiClient.setToken(res.token);
+      } catch (e) {
+        console.error("Backend student switch login error:", e);
+      }
     }
 
     return true;

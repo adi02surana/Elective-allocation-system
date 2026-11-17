@@ -1,6 +1,7 @@
 import { getDatabase, runTransaction } from "../db/database.js";
 import { getElectivesForStudent } from "./electiveService.js";
 import { logAuditEvent } from "./auditService.js";
+import { getRuleConfig } from "./allocationService.js";
 
 function mapWindowRow(row) {
   if (!row) return null;
@@ -40,17 +41,19 @@ export function getAllWindows() {
 }
 
 export function getStudentPreferenceList(studentId, cycleId = "slot_sem6_active") {
+  if (!studentId) return null;
   const db = getDatabase();
+  const normalized = String(studentId).trim();
   const listRow = db.prepare(`
     SELECT id, student_id, cycle_id, status, submitted_at, created_at, updated_at
     FROM preference_lists
-    WHERE student_id = ? AND cycle_id = ?
-  `).get(studentId, cycleId);
+    WHERE (UPPER(student_id) = UPPER(?) OR student_id = ?) AND cycle_id = ?
+  `).get(normalized, normalized, cycleId);
 
   if (!listRow) {
     return {
-      id: `pref_${studentId}`,
-      studentId,
+      id: `pref_${normalized}`,
+      studentId: normalized,
       cycleId,
       status: "DRAFT",
       submittedAt: null,
@@ -75,22 +78,56 @@ export function getStudentPreferenceList(studentId, cycleId = "slot_sem6_active"
   };
 }
 
-export function saveDraft(studentId, cycleId, items) {
-  const listId = `pref_${studentId}`;
-  return runTransaction((db) => {
-    db.prepare(`
+export function getAllPreferenceLists(cycleId = "slot_sem6_active") {
+  const db = getDatabase();
+  const listRows = db.prepare(`
+    SELECT id, student_id AS studentId, cycle_id AS cycleId, status, submitted_at AS submittedAt
+    FROM preference_lists
+    WHERE cycle_id = ?
+    ORDER BY created_at ASC
+  `).all(cycleId);
+
+  const stmt = db.prepare(`
+    SELECT elective_id AS electiveId, rank
+    FROM preference_items
+    WHERE preference_list_id = ?
+    ORDER BY rank ASC
+  `);
+
+  return listRows.map((pl) => ({
+    id: pl.id,
+    studentId: pl.studentId,
+    cycleId: pl.cycleId,
+    status: pl.status,
+    submittedAt: pl.submittedAt,
+    items: stmt.all(pl.id),
+  }));
+}
+
+export function saveDraft(studentId, cycleId = "slot_sem6_active", items = []) {
+  const db = getDatabase();
+  const normalized = String(studentId).trim();
+  const existing = db.prepare(`
+    SELECT id FROM preference_lists
+    WHERE (UPPER(student_id) = UPPER(?) OR student_id = ?) AND cycle_id = ?
+  `).get(normalized, normalized, cycleId);
+
+  const listId = existing ? existing.id : `pref_${normalized}`;
+
+  return runTransaction((transactionDb) => {
+    transactionDb.prepare(`
       INSERT INTO preference_lists (id, student_id, cycle_id, status, submitted_at, created_at, updated_at)
       VALUES (?, ?, ?, 'DRAFT', NULL, datetime('now'), datetime('now'))
       ON CONFLICT(student_id, cycle_id) DO UPDATE SET
         status = 'DRAFT',
         submitted_at = NULL,
         updated_at = datetime('now')
-    `).run(listId, studentId, cycleId);
+    `).run(listId, normalized, cycleId);
 
     // Replace items
-    db.prepare(`DELETE FROM preference_items WHERE preference_list_id = ?`).run(listId);
+    transactionDb.prepare(`DELETE FROM preference_items WHERE preference_list_id = ?`).run(listId);
 
-    const insertItem = db.prepare(`
+    const insertItem = transactionDb.prepare(`
       INSERT INTO preference_items (id, preference_list_id, elective_id, rank)
       VALUES (?, ?, ?, ?)
     `);
@@ -98,7 +135,7 @@ export function saveDraft(studentId, cycleId, items) {
     const normalizedItems = [];
     const seen = new Set();
     for (const item of items || []) {
-      if (!seen.has(item.electiveId)) {
+      if (item && item.electiveId && !seen.has(item.electiveId)) {
         seen.add(item.electiveId);
         normalizedItems.push({
           electiveId: item.electiveId,
@@ -115,7 +152,7 @@ export function saveDraft(studentId, cycleId, items) {
       success: true,
       preferenceList: {
         id: listId,
-        studentId,
+        studentId: normalized,
         cycleId,
         status: "DRAFT",
         submittedAt: null,
@@ -125,7 +162,7 @@ export function saveDraft(studentId, cycleId, items) {
   });
 }
 
-export function submitPreferences(studentProfile, cycleId, items) {
+export function submitPreferences(studentProfile, cycleId = "slot_sem6_active", items = []) {
   if (!studentProfile) {
     return { success: false, errors: ["Missing student academic profile."] };
   }
@@ -135,6 +172,14 @@ export function submitPreferences(studentProfile, cycleId, items) {
     return {
       success: false,
       errors: ["Registration window is currently CLOSED. Preferences cannot be submitted."],
+    };
+  }
+
+  const ruleConfig = getRuleConfig(cycleId);
+  if (ruleConfig?.isPublished) {
+    return {
+      success: false,
+      errors: ["Allocation results have already been published. Preferences are locked."],
     };
   }
 
@@ -187,22 +232,29 @@ export function submitPreferences(studentProfile, cycleId, items) {
   }
 
   // Validation passed - commit in transaction
-  const listId = `pref_${studentProfile.studentId}`;
+  const db = getDatabase();
+  const normalizedStudentId = String(studentProfile.studentId).trim();
+  const existing = db.prepare(`
+    SELECT id FROM preference_lists
+    WHERE (UPPER(student_id) = UPPER(?) OR student_id = ?) AND cycle_id = ?
+  `).get(normalizedStudentId, normalizedStudentId, cycleId);
+
+  const listId = existing ? existing.id : `pref_${normalizedStudentId}`;
   const nowIso = new Date().toISOString();
 
-  return runTransaction((db) => {
-    db.prepare(`
+  return runTransaction((transactionDb) => {
+    transactionDb.prepare(`
       INSERT INTO preference_lists (id, student_id, cycle_id, status, submitted_at, created_at, updated_at)
       VALUES (?, ?, ?, 'SUBMITTED', ?, datetime('now'), datetime('now'))
       ON CONFLICT(student_id, cycle_id) DO UPDATE SET
         status = 'SUBMITTED',
         submitted_at = ?,
         updated_at = datetime('now')
-    `).run(listId, studentProfile.studentId, cycleId, nowIso, nowIso);
+    `).run(listId, normalizedStudentId, cycleId, nowIso, nowIso);
 
-    db.prepare(`DELETE FROM preference_items WHERE preference_list_id = ?`).run(listId);
+    transactionDb.prepare(`DELETE FROM preference_items WHERE preference_list_id = ?`).run(listId);
 
-    const insertItem = db.prepare(`
+    const insertItem = transactionDb.prepare(`
       INSERT INTO preference_items (id, preference_list_id, elective_id, rank)
       VALUES (?, ?, ?, ?)
     `);
@@ -223,7 +275,7 @@ export function submitPreferences(studentProfile, cycleId, items) {
       submittedAt: nowIso,
       preferenceList: {
         id: listId,
-        studentId: studentProfile.studentId,
+        studentId: normalizedStudentId,
         cycleId,
         status: "SUBMITTED",
         submittedAt: nowIso,
@@ -233,7 +285,7 @@ export function submitPreferences(studentProfile, cycleId, items) {
   });
 }
 
-export function reopenForModification(studentId, cycleId) {
+export function reopenForModification(studentId, cycleId = "slot_sem6_active") {
   const window = getActiveWindow(cycleId);
   if (!window || window.status !== "OPEN") {
     return {
@@ -242,18 +294,39 @@ export function reopenForModification(studentId, cycleId) {
     };
   }
 
+  const ruleConfig = getRuleConfig(cycleId);
+  if (ruleConfig?.isPublished) {
+    return {
+      success: false,
+      error: "Allocation results have already been published. Preferences are locked.",
+    };
+  }
+
   const db = getDatabase();
+  const normalized = String(studentId).trim();
+  const existing = db.prepare(`
+    SELECT id FROM preference_lists
+    WHERE (UPPER(student_id) = UPPER(?) OR student_id = ?) AND cycle_id = ?
+  `).get(normalized, normalized, cycleId);
+
+  if (!existing) {
+    return {
+      success: false,
+      error: "No preference list found to edit.",
+    };
+  }
+
   db.prepare(`
     UPDATE preference_lists
     SET status = 'DRAFT', submitted_at = NULL, updated_at = datetime('now')
-    WHERE student_id = ? AND cycle_id = ?
-  `).run(studentId, cycleId);
+    WHERE id = ?
+  `).run(existing.id);
 
   logAuditEvent(
-    studentId,
+    normalized,
     "student",
     "PREFERENCES_REOPENED",
-    `Student ${studentId} reopened submitted preferences for modification.`
+    `Student ${normalized} reopened submitted preferences for modification.`
   );
 
   return { success: true };

@@ -123,11 +123,13 @@ export function getAllStudentProfiles() {
 }
 
 export function getStudentProfile(studentId) {
+  if (!studentId) return null;
   const db = getDatabase();
+  const normalized = String(studentId).trim();
   return db.prepare(`
     SELECT student_id AS studentId, user_id AS userId, name, branch, batch, semester, cgpa, slot_id AS slotId, email
     FROM student_profiles
-    WHERE student_id = ?
-  `).get(studentId) || null;
+    WHERE UPPER(student_id) = UPPER(?) OR user_id = ?
+  `).get(normalized, normalized) || null;
 }
 

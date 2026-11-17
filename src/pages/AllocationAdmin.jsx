@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Info,
   Terminal,
   Send,
   Eye,
@@ -40,7 +39,12 @@ export function AllocationAdmin({ onNavigateToReports }) {
     loadStatus();
   }, []);
 
-  const loadStatus = () => {
+  const loadStatus = async () => {
+    try {
+      await storageService.syncFromBackend();
+    } catch {
+      // fallback
+    }
     const r = allocationService.checkReadiness();
     setReadiness(r);
 
@@ -64,7 +68,7 @@ export function AllocationAdmin({ onNavigateToReports }) {
     }
   };
 
-  const handlePolicyChange = (e) => {
+  const handlePolicyChange = async (e) => {
     const newPolicy = e.target.value;
     let description = "";
     if (newPolicy === "CGPA_MERIT") {
@@ -75,7 +79,7 @@ export function AllocationAdmin({ onNavigateToReports }) {
       description = "Ascending order of institutional Student Roll Number.";
     }
 
-    const updated = allocationService.updateRuleConfig(
+    const updated = await allocationService.updateRuleConfig(
       { tieBreakPolicy: newPolicy, description },
       currentUser?.role,
       currentUser?.name
@@ -87,12 +91,12 @@ export function AllocationAdmin({ onNavigateToReports }) {
     }
   };
 
-  const executeAllocation = () => {
+  const executeAllocation = async () => {
     setShowConfirmRunModal(false);
     setActionMessage(null);
     setErrorMessage(null);
 
-    const output = allocationService.executeAllocation(currentUser?.role, currentUser?.name);
+    const output = await allocationService.executeAllocation(currentUser?.role, currentUser?.name);
 
     if (output.success) {
       setRecentResults(output.results);
@@ -106,30 +110,32 @@ export function AllocationAdmin({ onNavigateToReports }) {
       setActionMessage(
         `Allocation computed successfully! Processed ${output.summary.totalStudentsProcessed} students (${output.summary.totalAllocated} allocated, ${output.summary.totalUnallocated} unallocated). Review outcomes below before publishing.`
       );
-      loadStatus();
+      await loadStatus();
     } else {
       setErrorMessage(output.error || "Allocation execution failed.");
     }
   };
 
-  const publishResults = () => {
+  const publishResults = async () => {
     setShowConfirmPublishModal(false);
-    const res = allocationService.publishResults(currentUser?.role, currentUser?.name);
+    const res = await allocationService.publishResults(currentUser?.role, currentUser?.name);
     if (res.success) {
       setActionMessage("Allocation outcomes have been officially published! Students can now view their individual results.");
-      loadStatus();
+      await loadStatus();
     } else {
       setErrorMessage(res.error);
     }
   };
 
-  const resetAllocation = () => {
+  const resetAllocation = async () => {
     setShowResetModal(false);
-    const res = allocationService.resetAllocation(currentUser?.role, currentUser?.name);
+    const res = await allocationService.resetAllocation(currentUser?.role, currentUser?.name);
     if (res.success) {
       setActionMessage("Allocation state cleared. You may adjust capacities or rules and re-run.");
+      setRecentResults([]);
+      setResultsSummary(null);
       setExecutionLogs([]);
-      loadStatus();
+      await loadStatus();
     } else {
       setErrorMessage(res.error);
     }
@@ -142,7 +148,7 @@ export function AllocationAdmin({ onNavigateToReports }) {
         <div>
           <h1 className="page-title">Elective Allocation Administration</h1>
           <p className="page-description">
-            Use Case <strong>UC-011</strong> • Verify preconditions, configure tie-break policies, and initiate centralized allocation.
+            Verify preconditions, configure tie-break policies, and initiate centralized allocation.
           </p>
         </div>
         <div>
@@ -164,17 +170,6 @@ export function AllocationAdmin({ onNavigateToReports }) {
           <div>{errorMessage}</div>
         </div>
       )}
-
-      {/* Institutional Policy Disclaimer */}
-      <div className="alert alert-info">
-        <Info size={20} style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Prototype Algorithm Transparency:</strong> The SRS states that allocation rules and tie-breaking must be 
-          transparent and approved, but does not mandate one single rigid institutional formula. 
-          The policy below is configured as a clear, deterministic Serial Priority model for midterm evaluation. 
-          The student team should confirm the final institutional tie-break policy with the instructor/senate.
-        </div>
-      </div>
 
       {/* Preconditions Checklist Card */}
       <div className="card">
@@ -340,7 +335,7 @@ export function AllocationAdmin({ onNavigateToReports }) {
               className="btn btn-primary"
             >
               <Play size={16} />
-              <span>{allocationStatus === "NOT_STARTED" ? "Start Allocation (UC-011)" : "Re-Run Allocation"}</span>
+              <span>{allocationStatus === "NOT_STARTED" ? "Start Allocation" : "Re-Run Allocation"}</span>
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { authService } from "../services/authService";
 import { electiveService } from "../services/electiveService";
+import { storageService } from "../services/storageService";
 import { StatusBadge } from "../components/StatusBadge";
 import { Modal } from "../components/Modal";
 import {
@@ -11,7 +12,6 @@ import {
   Search,
   CheckCircle2,
   AlertTriangle,
-  Info,
   ShieldAlert,
 } from "lucide-react";
 
@@ -47,7 +47,12 @@ export function FacultyCourseManagement() {
     loadElectives();
   }, []);
 
-  const loadElectives = () => {
+  const loadElectives = async () => {
+    try {
+      await storageService.syncFromBackend();
+    } catch {
+      // fallback to local
+    }
     setElectives(electiveService.getAllElectives());
   };
 
@@ -109,13 +114,13 @@ export function FacultyCourseManagement() {
     }
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     setFormErrors([]);
     setActionSuccess(null);
 
     if (modalMode === "CREATE") {
-      const result = electiveService.createElective(
+      const result = await electiveService.createElective(
         formData,
         currentUser?.role || "faculty",
         currentUser?.name || "Faculty Coordinator"
@@ -124,12 +129,12 @@ export function FacultyCourseManagement() {
       if (result.success) {
         setIsModalOpen(false);
         setActionSuccess(`Course ${result.elective.courseCode} created successfully!`);
-        loadElectives();
+        await loadElectives();
       } else {
         setFormErrors(result.errors || ["Failed to create course."]);
       }
     } else {
-      const result = electiveService.updateElective(
+      const result = await electiveService.updateElective(
         editingId,
         formData,
         currentUser?.role || "faculty",
@@ -139,15 +144,15 @@ export function FacultyCourseManagement() {
       if (result.success) {
         setIsModalOpen(false);
         setActionSuccess(`Course ${result.elective.courseCode} updated successfully!`);
-        loadElectives();
+        await loadElectives();
       } else {
         setFormErrors(result.errors || ["Failed to update course."]);
       }
     }
   };
 
-  const handleDeleteCourse = (id) => {
-    const result = electiveService.deleteElective(
+  const handleDeleteCourse = async (id) => {
+    const result = await electiveService.deleteElective(
       id,
       currentUser?.role || "faculty",
       currentUser?.name || "Faculty Coordinator"
@@ -157,7 +162,7 @@ export function FacultyCourseManagement() {
 
     if (result.success) {
       setActionSuccess("Course deleted successfully.");
-      loadElectives();
+      await loadElectives();
     } else {
       setFormErrors(result.errors || ["Failed to delete course."]);
     }
@@ -176,7 +181,7 @@ export function FacultyCourseManagement() {
         <div>
           <h1 className="page-title">Elective Course Management</h1>
           <p className="page-description">
-            Use Case <strong>UC-007</strong> • Manage elective course details, seat capacities, and eligibility criteria.
+            Manage elective course details, seat capacities, and eligibility criteria.
           </p>
         </div>
         <div>
@@ -202,15 +207,6 @@ export function FacultyCourseManagement() {
           <div>{formErrors.join(" ")}</div>
         </div>
       )}
-
-      {/* Capacity Constraint Notice */}
-      <div className="alert alert-info">
-        <Info size={20} style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Capacity Integrity Rule:</strong> Once an allocation has completed, reducing a course's seat capacity 
-          below the number of currently allocated students is automatically blocked to prevent inconsistent seat counts.
-        </div>
-      </div>
 
       {/* Filter / Search Bar */}
       <div className="card" style={{ padding: "0.85rem 1.25rem", marginBottom: "1.25rem" }}>

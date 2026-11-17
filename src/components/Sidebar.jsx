@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -14,6 +14,55 @@ import {
 
 export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
   const role = currentUser?.role || "student";
+
+  // Resizable sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem("SIDEBAR_WIDTH");
+      return saved ? Math.max(180, Math.min(parseInt(saved, 10), 450)) : 260;
+    } catch {
+      return 260;
+    }
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+      const newWidth = Math.max(180, Math.min(e.clientX, 450));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing) {
+        setIsResizing(false);
+        try {
+          localStorage.setItem("SIDEBAR_WIDTH", sidebarWidth.toString());
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    if (isResizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, sidebarWidth]);
 
   const renderNavLinks = () => {
     if (role === "student") {
@@ -41,7 +90,7 @@ export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
             className={`nav-item ${currentTab === "preference-builder" ? "active" : ""}`}
           >
             <ListOrdered size={18} />
-            <span>Preference Builder (UC-005)</span>
+            <span>Preference Builder</span>
           </button>
 
           <button
@@ -64,7 +113,7 @@ export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
             className={`nav-item ${currentTab === "course-management" ? "active" : ""}`}
           >
             <Layers size={18} />
-            <span>Course Management (UC-007)</span>
+            <span>Course Management</span>
           </button>
 
           <button
@@ -95,7 +144,7 @@ export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
             className={`nav-item ${currentTab === "allocation-admin" ? "active" : ""}`}
           >
             <ShieldCheck size={18} />
-            <span>Allocation Console (UC-011)</span>
+            <span>Allocation Console</span>
           </button>
 
           <button
@@ -168,12 +217,20 @@ export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
   };
 
   return (
-    <aside className="sidebar">
+    <aside
+      className="sidebar"
+      style={{
+        width: `${sidebarWidth}px`,
+        minWidth: `${sidebarWidth}px`,
+        maxWidth: `${sidebarWidth}px`,
+        position: "relative",
+        transition: isResizing ? "none" : "width 0.15s ease",
+      }}
+    >
       <div className="sidebar-header">
         <div className="institute-label">The LNMIIT Jaipur</div>
         <div className="system-title">
           <span>Elective Allocator</span>
-          <span className="team-chip">Team T016</span>
         </div>
       </div>
 
@@ -205,6 +262,13 @@ export function Sidebar({ currentTab, onSelectTab, currentUser, onLogout }) {
           <span>Exit to Login</span>
         </button>
       </div>
+
+      {/* Interactive Resizer Handle */}
+      <div
+        className="sidebar-resizer"
+        onMouseDown={startResizing}
+        title="Drag horizontally to resize navigation sidebar"
+      />
     </aside>
   );
 }

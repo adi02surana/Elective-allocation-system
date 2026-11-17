@@ -36,7 +36,7 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     const student = authService.getCurrentStudentProfile();
     setProfile(student);
 
@@ -47,9 +47,10 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
       const electives = electiveService.getElectivesForStudent(student);
       setAvailableElectives(electives);
 
-      const prefList = preferenceService.getStudentPreferenceList(student.studentId, window?.id);
-      setPrefStatus(prefList.status);
-      setSubmittedAt(prefList.submittedAt);
+      // Fetch current status and items from backend / DB
+      const prefList = await preferenceService.fetchStudentPreferenceList(student.studentId, window?.id);
+      setPrefStatus(prefList.status || "DRAFT");
+      setSubmittedAt(prefList.submittedAt || null);
 
       if (prefList.items && prefList.items.length > 0) {
         setSelectedItems(prefList.items);
@@ -66,7 +67,7 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
   const isLocked = prefStatus === "SUBMITTED" || !isWindowOpen;
 
   // Add elective to preference list
-  const handleAddElective = () => {
+  const handleAddElective = async () => {
     if (!selectedElectiveToAdd) return;
 
     if (selectedItems.some((item) => item.electiveId === selectedElectiveToAdd)) {
@@ -83,12 +84,12 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
 
     // Auto save draft
     if (profile && activeWindow) {
-      preferenceService.saveDraft(profile.studentId, activeWindow.id, newItems);
+      await preferenceService.saveDraft(profile.studentId, activeWindow.id, newItems);
     }
   };
 
   // Move choice UP
-  const handleMoveUp = (index) => {
+  const handleMoveUp = async (index) => {
     if (index === 0) return;
     const updated = [...selectedItems];
     const temp = updated[index];
@@ -98,12 +99,12 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
     const reindexed = updated.map((item, idx) => ({ ...item, rank: idx + 1 }));
     setSelectedItems(reindexed);
     if (profile && activeWindow) {
-      preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
+      await preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
     }
   };
 
   // Move choice DOWN
-  const handleMoveDown = (index) => {
+  const handleMoveDown = async (index) => {
     if (index === selectedItems.length - 1) return;
     const updated = [...selectedItems];
     const temp = updated[index];
@@ -112,17 +113,17 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
     const reindexed = updated.map((item, idx) => ({ ...item, rank: idx + 1 }));
     setSelectedItems(reindexed);
     if (profile && activeWindow) {
-      preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
+      await preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
     }
   };
 
   // Remove choice
-  const handleRemove = (index) => {
+  const handleRemove = async (index) => {
     const updated = selectedItems.filter((_, idx) => idx !== index);
     const reindexed = updated.map((item, idx) => ({ ...item, rank: idx + 1 }));
     setSelectedItems(reindexed);
     if (profile && activeWindow) {
-      preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
+      await preferenceService.saveDraft(profile.studentId, activeWindow.id, reindexed);
     }
   };
 
@@ -144,9 +145,9 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
   };
 
   // Final submission execution (UC-005)
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setShowReviewModal(false);
-    const result = preferenceService.submitPreferences(profile, activeWindow.id, selectedItems);
+    const result = await preferenceService.submitPreferences(profile, activeWindow.id, selectedItems);
 
     if (result.success) {
       setPrefStatus("SUBMITTED");
@@ -163,14 +164,14 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
   };
 
   // Revert to draft for modification (UC-006)
-  const handleReopenModification = () => {
-    const result = preferenceService.reopenForModification(profile, activeWindow.id);
+  const handleReopenModification = async () => {
+    const result = await preferenceService.reopenForModification(profile, activeWindow.id);
     if (result.success) {
       setPrefStatus("DRAFT");
       setSuccessMessage("Preferences unlocked. You may modify your rankings and re-submit before the deadline.");
       setErrors([]);
     } else {
-      setErrors([result.error]);
+      setErrors([result.error || "Failed to reopen preferences for modification."]);
     }
   };
 
@@ -192,7 +193,7 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
         <div>
           <h1 className="page-title">Ranked Preference Builder</h1>
           <p className="page-description">
-            Use Case <strong>UC-005</strong> • Select and rank your elective choices in order of priority.
+            Select and rank your elective choices in order of priority.
           </p>
         </div>
         <div>
@@ -422,7 +423,7 @@ export function PreferenceBuilder({ initialAddElectiveId }) {
                     className="btn btn-success"
                   >
                     <Send size={16} />
-                    <span>Review & Submit Preferences (UC-005)</span>
+                    <span>Review & Submit Preferences</span>
                   </button>
                 )}
               </div>

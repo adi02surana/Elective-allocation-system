@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { reportService } from "../services/reportService";
+import { storageService } from "../services/storageService";
 import { StatusBadge } from "../components/StatusBadge";
 import {
   BarChart3,
@@ -23,7 +24,12 @@ export function ReportsPage() {
     loadReports();
   }, []);
 
-  const loadReports = () => {
+  const loadReports = async () => {
+    try {
+      await storageService.syncFromBackend();
+    } catch {
+      // fallback
+    }
     setReportData(reportService.getComprehensiveReport());
   };
 

@@ -113,14 +113,32 @@ input, select, textarea {
 
 /* Sidebar */
 .sidebar {
-  width: 270px;
+  width: 260px;
   background-color: var(--primary-900);
   color: var(--white);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   border-right: 1px solid var(--primary-800);
-  transition: width var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+  z-index: 50;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background-color: var(--brand-blue);
 }
 
 .sidebar-header {

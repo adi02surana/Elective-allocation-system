@@ -1,4 +1,4 @@
-import { verifyDatabaseConnection } from "../db/database.js";
+import { verifyDatabaseConnection, getDatabase } from "../db/database.js";
 import { seedDatabase } from "../db/seed.js";
 import * as authService from "../services/authService.js";
 import * as electiveService from "../services/electiveService.js";
@@ -60,8 +60,8 @@ export async function handleApiRoute(req, res, parsedUrl, body = {}) {
   // Resolve calling user if token present
   const token = getAuthToken(req) || body.token;
   const callingUser = token ? authService.getUserByToken(token) : null;
-  const actorRole = callingUser?.role || body.actorRole || "student";
-  const actorName = callingUser?.name || body.actorName || "Demo User";
+  const actorRole = body.actorRole || callingUser?.role || "student";
+  const actorName = body.actorName || callingUser?.name || "Demo User";
 
   try {
     // 1. Health check & DB verification
@@ -146,6 +146,11 @@ export async function handleApiRoute(req, res, parsedUrl, body = {}) {
 
     if (pathname === "/api/preferences/windows" && method === "GET") {
       return json(200, { success: true, windows: preferenceService.getAllWindows() });
+    }
+
+    if (pathname === "/api/preferences/lists" && method === "GET") {
+      const cycleId = parsedUrl.searchParams.get("cycleId") || "slot_sem6_active";
+      return json(200, { success: true, preferenceLists: preferenceService.getAllPreferenceLists(cycleId) });
     }
 
     if (pathname.startsWith("/api/preferences/list/") && method === "GET") {
@@ -247,6 +252,30 @@ export async function handleApiRoute(req, res, parsedUrl, body = {}) {
         message: "Database successfully reset to canonical baseline seed data.",
         counts,
       });
+    }
+
+    // 8. Live Database Tables & Introspection
+    if (pathname === "/api/database/tables" && method === "GET") {
+      const db = getDatabase();
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC")
+        .all();
+      const tableStats = tables.map((t) => {
+        const countRow = db.prepare(`SELECT COUNT(*) AS count FROM ${t.name}`).get();
+        return { name: t.name, rowCount: countRow?.count || 0 };
+      });
+      return json(200, { success: true, tables: tableStats });
+    }
+
+    if (pathname.startsWith("/api/database/table/") && method === "GET") {
+      const rawTableName = pathname.replace("/api/database/table/", "").trim();
+      const db = getDatabase();
+      if (!/^[a-zA-Z0-9_]+$/.test(rawTableName)) {
+        return json(400, { success: false, error: "Invalid table name" });
+      }
+      const columns = db.prepare(`PRAGMA table_info(${rawTableName})`).all();
+      const rows = db.prepare(`SELECT * FROM ${rawTableName} LIMIT 200`).all();
+      return json(200, { success: true, tableName: rawTableName, columns, rows });
     }
 
     // Route not found
