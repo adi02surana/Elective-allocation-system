@@ -88,7 +88,19 @@ class StorageService {
           data.allocationRuleConfig = configRes.value.config;
         }
         if (resultsRes.status === "fulfilled" && resultsRes.value?.success && Array.isArray(resultsRes.value.results)) {
-          data.allocationResults = resultsRes.value.results;
+          const electives = data.electives || [];
+          data.allocationResults = resultsRes.value.results.map((r) => {
+            const el = electives.find((e) => e.id === r.electiveId);
+            return {
+              ...r,
+              electiveCode: r.electiveCode || r.courseCode || el?.courseCode || "",
+              electiveName: r.electiveName || r.courseName || el?.name || "",
+              courseCode: r.courseCode || r.electiveCode || el?.courseCode || "",
+              courseName: r.courseName || r.electiveName || el?.name || "",
+              reason: r.reason || r.assignedReason || "",
+              assignedReason: r.assignedReason || r.reason || "",
+            };
+          });
         }
         if (windowsRes.status === "fulfilled" && windowsRes.value?.success && Array.isArray(windowsRes.value.windows)) {
           data.registrationWindows = windowsRes.value.windows;

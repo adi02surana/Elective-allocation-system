@@ -211,7 +211,15 @@ export function executeAllocation(cycleId = "slot_sem6_active", actorRole = "adm
 
     return {
       success: true,
-      results: engineOutput.results,
+      results: engineOutput.results.map((r) => ({
+        ...r,
+        courseCode: r.courseCode || r.electiveCode || null,
+        courseName: r.courseName || r.electiveName || null,
+        electiveCode: r.electiveCode || r.courseCode || null,
+        electiveName: r.electiveName || r.courseName || null,
+        assignedReason: r.assignedReason || r.reason || "",
+        reason: r.reason || r.assignedReason || "",
+      })),
       courseStats: engineOutput.courseStats,
       summary: enrichedSummary,
       executionLogs: engineOutput.executionLogs,
@@ -261,15 +269,25 @@ export function resetAllocation(cycleId = "slot_sem6_active", actorRole = "admin
 
 export function getAllocationResults(cycleId = "slot_sem6_active") {
   const db = getDatabase();
-  return db.prepare(`
-    SELECT id, cycle_id AS cycleId, student_id AS studentId, student_name AS studentName,
-           branch, semester, cgpa, elective_id AS electiveId, course_code AS courseCode,
-           course_name AS courseName, preference_rank AS preferenceRank, status,
-           assigned_reason AS assignedReason, allocated_at AS allocatedAt
-    FROM allocation_results
-    WHERE cycle_id = ?
-    ORDER BY status ASC, cgpa DESC
+  const rows = db.prepare(`
+    SELECT ar.id, ar.cycle_id AS cycleId, ar.student_id AS studentId, ar.student_name AS studentName,
+           ar.branch, ar.semester, ar.cgpa, ar.elective_id AS electiveId,
+           COALESCE(ar.course_code, e.course_code) AS courseCode,
+           COALESCE(ar.course_name, e.name) AS courseName,
+           ar.preference_rank AS preferenceRank, ar.status,
+           ar.assigned_reason AS assignedReason, ar.allocated_at AS allocatedAt
+    FROM allocation_results ar
+    LEFT JOIN electives e ON ar.elective_id = e.id
+    WHERE ar.cycle_id = ?
+    ORDER BY ar.status ASC, ar.cgpa DESC
   `).all(cycleId);
+
+  return rows.map((r) => ({
+    ...r,
+    electiveCode: r.courseCode || "",
+    electiveName: r.courseName || "",
+    reason: r.assignedReason || "",
+  }));
 }
 
 export function getStudentResult(studentId, cycleId = "slot_sem6_active", bypassPublish = false) {
@@ -283,12 +301,15 @@ export function getStudentResult(studentId, cycleId = "slot_sem6_active", bypass
 
   const db = getDatabase();
   const result = db.prepare(`
-    SELECT id, cycle_id AS cycleId, student_id AS studentId, student_name AS studentName,
-           branch, semester, cgpa, elective_id AS electiveId, course_code AS courseCode,
-           course_name AS courseName, preference_rank AS preferenceRank, status,
-           assigned_reason AS assignedReason, allocated_at AS allocatedAt
-    FROM allocation_results
-    WHERE student_id = ? AND cycle_id = ?
+    SELECT ar.id, ar.cycle_id AS cycleId, ar.student_id AS studentId, ar.student_name AS studentName,
+           ar.branch, ar.semester, ar.cgpa, ar.elective_id AS electiveId,
+           COALESCE(ar.course_code, e.course_code) AS courseCode,
+           COALESCE(ar.course_name, e.name) AS courseName,
+           ar.preference_rank AS preferenceRank, ar.status,
+           ar.assigned_reason AS assignedReason, ar.allocated_at AS allocatedAt
+    FROM allocation_results ar
+    LEFT JOIN electives e ON ar.elective_id = e.id
+    WHERE UPPER(ar.student_id) = UPPER(?) AND ar.cycle_id = ?
   `).get(studentId, cycleId);
 
   if (!result) {
@@ -300,6 +321,11 @@ export function getStudentResult(studentId, cycleId = "slot_sem6_active", bypass
 
   return {
     isAvailable: true,
-    result,
+    result: {
+      ...result,
+      electiveCode: result.courseCode || "",
+      electiveName: result.courseName || "",
+      reason: result.assignedReason || (result.status === "ALLOCATED" ? "Allocated based on academic merit priority." : "No elective assigned in regular round."),
+    },
   };
 }

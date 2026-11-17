@@ -282,6 +282,9 @@ describe("ECAS End-to-End System & Database Integration Tests", () => {
       const afterPub = allocationService.getStudentResult("22UCS001", "slot_sem6_active", false);
       expect(afterPub.isAvailable).toBe(true);
       expect(afterPub.result.courseCode).toBe("CS4101");
+      expect(afterPub.result.electiveCode).toBe("CS4101");
+      expect(afterPub.result.electiveName).toBe("Machine Learning");
+      expect(afterPub.result.reason).toContain("Allocated");
     });
 
     it("generates comprehensive institution reports and CSV export", () => {

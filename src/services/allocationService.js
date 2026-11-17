@@ -98,7 +98,20 @@ class AllocationService {
       }
 
       const data = storageService.getData();
-      data.allocationResults = res.results;
+      const electives = data.electives || [];
+      const normalizedResults = (res.results || []).map((r) => {
+        const el = electives.find((e) => e.id === r.electiveId);
+        return {
+          ...r,
+          electiveCode: r.electiveCode || r.courseCode || el?.courseCode || "",
+          electiveName: r.electiveName || r.courseName || el?.name || "",
+          courseCode: r.courseCode || r.electiveCode || el?.courseCode || "",
+          courseName: r.courseName || r.electiveName || el?.name || "",
+          reason: r.reason || r.assignedReason || "",
+          assignedReason: r.assignedReason || r.reason || "",
+        };
+      });
+      data.allocationResults = normalizedResults;
       data.allocationRuleConfig.status = "COMPLETED";
       data.allocationRuleConfig.lastRunAt = new Date().toISOString();
       data.allocationRuleConfig.isPublished = false;
@@ -217,7 +230,19 @@ class AllocationService {
 
   getResults(cycleId = "slot_sem6_active") {
     const data = storageService.getData();
-    return data.allocationResults || [];
+    const electives = data.electives || [];
+    return (data.allocationResults || []).map((r) => {
+      const el = electives.find((e) => e.id === r.electiveId);
+      return {
+        ...r,
+        electiveCode: r.electiveCode || r.courseCode || el?.courseCode || "",
+        electiveName: r.electiveName || r.courseName || el?.name || "",
+        courseCode: r.courseCode || r.electiveCode || el?.courseCode || "",
+        courseName: r.courseName || r.electiveName || el?.name || "",
+        reason: r.reason || r.assignedReason || "",
+        assignedReason: r.assignedReason || r.reason || "",
+      };
+    });
   }
 
   getStudentResult(studentId, isStaff = false) {
@@ -233,8 +258,10 @@ class AllocationService {
       };
     }
 
-    const result = (data.allocationResults || []).find((r) => r.studentId === studentId);
-    if (!result) {
+    const raw = (data.allocationResults || []).find(
+      (r) => (r.studentId || "").toUpperCase() === (studentId || "").toUpperCase()
+    );
+    if (!raw) {
       return {
         isAvailable: false,
         status: "NOT_FOUND",
@@ -242,9 +269,21 @@ class AllocationService {
       };
     }
 
+    const elective = (data.electives || []).find((e) => e.id === raw.electiveId);
+
+    const enriched = {
+      ...raw,
+      electiveCode: raw.electiveCode || raw.courseCode || elective?.courseCode || "",
+      electiveName: raw.electiveName || raw.courseName || elective?.name || "",
+      courseCode: raw.courseCode || raw.electiveCode || elective?.courseCode || "",
+      courseName: raw.courseName || raw.electiveName || elective?.name || "",
+      reason: raw.reason || raw.assignedReason || (raw.status === "ALLOCATED" ? "Allocated based on academic merit priority." : "No elective assigned in regular round."),
+      assignedReason: raw.assignedReason || raw.reason || (raw.status === "ALLOCATED" ? "Allocated based on academic merit priority." : "No elective assigned in regular round."),
+    };
+
     return {
       isAvailable: true,
-      result,
+      result: enriched,
       isPublished: config.isPublished,
     };
   }

@@ -462,9 +462,9 @@ export function AllocationAdmin({ onNavigateToReports }) {
                       <StatusBadge status={r.status} />
                     </td>
                     <td>
-                      {r.electiveCode ? (
+                      {r.electiveCode || r.courseCode ? (
                         <strong style={{ color: "#059669" }}>
-                          {r.electiveCode} — {r.electiveName}
+                          {r.electiveCode || r.courseCode} — {r.electiveName || r.courseName}
                         </strong>
                       ) : (
                         <span style={{ color: "#94a3b8" }}>None</span>
@@ -478,7 +478,7 @@ export function AllocationAdmin({ onNavigateToReports }) {
                       )}
                     </td>
                     <td style={{ fontSize: "0.82rem", color: "#475569", maxWidth: "340px" }}>
-                      {r.reason}
+                      {r.reason || r.assignedReason}
                     </td>
                   </tr>
                 ))}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { authService } from "../services/authService";
 import { allocationService } from "../services/allocationService";
+import { storageService } from "../services/storageService";
 import { StatusBadge } from "../components/StatusBadge";
 import { Award, CheckCircle2, AlertCircle, Clock, BookOpen, User, Calendar } from "lucide-react";
 
@@ -9,12 +10,20 @@ export function StudentResultView() {
   const [resultState, setResultState] = useState(null);
 
   useEffect(() => {
-    const student = authService.getCurrentStudentProfile();
-    setProfile(student);
-    if (student) {
-      const res = allocationService.getStudentResult(student.studentId, false);
-      setResultState(res);
-    }
+    const loadResult = async () => {
+      try {
+        await storageService.syncFromBackend();
+      } catch {
+        // fallback
+      }
+      const student = authService.getCurrentStudentProfile();
+      setProfile(student);
+      if (student) {
+        const res = allocationService.getStudentResult(student.studentId, false);
+        setResultState(res);
+      }
+    };
+    loadResult();
   }, []);
 
   if (!profile) {
@@ -130,7 +139,8 @@ export function StudentResultView() {
                 </div>
 
                 <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#065f46", margin: "0.5rem 0" }}>
-                  {resultState.result.electiveCode}: {resultState.result.electiveName}
+                  {resultState.result.electiveCode || resultState.result.courseCode}
+                  {(resultState.result.electiveName || resultState.result.courseName) ? `: ${resultState.result.electiveName || resultState.result.courseName}` : ""}
                 </h2>
 
                 <div
@@ -145,7 +155,9 @@ export function StudentResultView() {
                   }}
                 >
                   <strong>Allocation Decision Basis:</strong>
-                  <div style={{ marginTop: "0.25rem" }}>{resultState.result.reason}</div>
+                  <div style={{ marginTop: "0.25rem" }}>
+                    {resultState.result.reason || resultState.result.assignedReason || "Allocated based on academic merit priority and preference ranking."}
+                  </div>
                 </div>
 
                 <div style={{ fontSize: "0.85rem", color: "#475569", lineHeight: "1.6" }}>
@@ -206,7 +218,9 @@ export function StudentResultView() {
                   }}
                 >
                   <strong>Reason for Unallocated Status:</strong>
-                  <div style={{ marginTop: "0.25rem" }}>{resultState.result.reason}</div>
+                  <div style={{ marginTop: "0.25rem" }}>
+                    {resultState.result.reason || resultState.result.assignedReason || "Selected courses reached capacity."}
+                  </div>
                 </div>
 
                 <div style={{ fontSize: "0.85rem", color: "#475569", lineHeight: "1.6" }}>

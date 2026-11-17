@@ -58,7 +58,8 @@ export function ReportsPage() {
     const matchesSearch =
       r.studentName.toLowerCase().includes(studentSearch.toLowerCase()) ||
       r.studentId.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      (r.electiveCode && r.electiveCode.toLowerCase().includes(studentSearch.toLowerCase()));
+      (r.electiveCode && r.electiveCode.toLowerCase().includes(studentSearch.toLowerCase())) ||
+      (r.courseCode && r.courseCode.toLowerCase().includes(studentSearch.toLowerCase()));
 
     const matchesStatus = statusFilter === "ALL" || r.status === statusFilter;
     const matchesBranch = branchFilter === "ALL" || r.branch === branchFilter;
@@ -354,9 +355,9 @@ export function ReportsPage() {
                       <StatusBadge status={r.status} />
                     </td>
                     <td>
-                      {r.electiveCode ? (
+                      {r.electiveCode || r.courseCode ? (
                         <strong style={{ color: "#059669" }}>
-                          {r.electiveCode} — {r.electiveName}
+                          {r.electiveCode || r.courseCode} — {r.electiveName || r.courseName}
                         </strong>
                       ) : (
                         <span style={{ color: "#94a3b8" }}>None</span>
@@ -370,7 +371,7 @@ export function ReportsPage() {
                       )}
                     </td>
                     <td style={{ fontSize: "0.82rem", color: "#475569", maxWidth: "340px" }}>
-                      {r.reason}
+                      {r.reason || r.assignedReason}
                     </td>
                   </tr>
                 ))

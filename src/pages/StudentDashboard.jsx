@@ -255,13 +255,14 @@ export function StudentDashboard({ onNavigate }) {
                 <CheckCircle2 size={32} color="#059669" style={{ flexShrink: 0, marginTop: "2px" }} />
                 <div>
                   <h3 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#065f46" }}>
-                    Congratulations! Allocated to {resultData.result.electiveCode}: {resultData.result.electiveName}
+                    Congratulations! Allocated to {resultData.result.electiveCode || resultData.result.courseCode}
+                    {(resultData.result.electiveName || resultData.result.courseName) ? `: ${resultData.result.electiveName || resultData.result.courseName}` : ""}
                   </h3>
                   <div style={{ fontSize: "0.9rem", color: "#047857", marginTop: "0.35rem" }}>
-                    <strong>Preference Rank Granted:</strong> Choice #{resultData.result.preferenceRank}
+                    <strong>Preference Rank Granted:</strong> Choice #{resultData.result.preferenceRank || 1}
                   </div>
                   <div style={{ fontSize: "0.85rem", color: "#065f46", marginTop: "0.25rem" }}>
-                    <strong>Allocation Basis:</strong> {resultData.result.reason}
+                    <strong>Allocation Basis:</strong> {resultData.result.reason || resultData.result.assignedReason || "Allocated based on academic merit priority."}
                   </div>
                 </div>
               </div>
@@ -283,7 +284,7 @@ export function StudentDashboard({ onNavigate }) {
                     Status: Unallocated
                   </h3>
                   <div style={{ fontSize: "0.88rem", color: "#b91c1c", marginTop: "0.35rem" }}>
-                    {resultData.result.reason}
+                    {resultData.result.reason || resultData.result.assignedReason || "No elective assigned in regular round."}
                   </div>
                   <div style={{ fontSize: "0.82rem", color: "#7f1d1d", marginTop: "0.5rem" }}>
                     Note: Students who remain unallocated will be eligible for institutional Spot Round / Waitlist counseling.
